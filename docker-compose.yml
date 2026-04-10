@@ -95,6 +95,21 @@ services:
     networks:
       - ai-gateway-network
 
+  # Frontend Service
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: ai-gateway-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ai-gateway-network
+
 volumes:
   mysql_data:
     driver: local
