@@ -3,6 +3,7 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.constants import UserRole, UserStatus
 from app.core.exceptions import UserAlreadyExistsError, UserNotFoundError
@@ -20,28 +21,28 @@ class UserService:
     async def get_by_id(self, user_id: int) -> Optional[User]:
         """Get user by ID."""
         result = await self.db.execute(
-            select(User).where(User.id == user_id)
+            select(User).options(selectinload(User.quota)).where(User.id == user_id)
         )
         return result.scalar_one_or_none()
     
     async def get_by_username(self, username: str) -> Optional[User]:
         """Get user by username."""
         result = await self.db.execute(
-            select(User).where(User.username == username)
+            select(User).options(selectinload(User.quota)).where(User.username == username)
         )
         return result.scalar_one_or_none()
     
     async def get_by_email(self, email: str) -> Optional[User]:
         """Get user by email."""
         result = await self.db.execute(
-            select(User).where(User.email == email)
+            select(User).options(selectinload(User.quota)).where(User.email == email)
         )
         return result.scalar_one_or_none()
     
     async def get_by_api_key(self, api_key: str) -> Optional[User]:
         """Get user by API key."""
         result = await self.db.execute(
-            select(User).where(User.api_key == api_key)
+            select(User).options(selectinload(User.quota)).where(User.api_key == api_key)
         )
         return result.scalar_one_or_none()
     
