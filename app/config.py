@@ -110,9 +110,9 @@ class Settings(BaseSettings):
             yaml_config = env_settings
         return (
             init_settings,
-            env_settings,
             dotenv_settings,
             yaml_config,
+            env_settings,
             file_secret_settings,
         )
 

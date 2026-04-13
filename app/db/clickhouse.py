@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Any, Optional
 
 from clickhouse_driver import Client as SyncClient
-from clickhouse_driver import connect
 
 from app.config import settings
 
@@ -15,7 +14,7 @@ def get_clickhouse() -> SyncClient:
     """Get ClickHouse client (synchronous)."""
     global _clickhouse_client
     if _clickhouse_client is None:
-        _clickhouse_client = connect(
+        _clickhouse_client = SyncClient(
             host=settings.clickhouse.host,
             port=settings.clickhouse.port,
             database=settings.clickhouse.database,
