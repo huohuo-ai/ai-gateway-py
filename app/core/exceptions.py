@@ -1,53 +1,53 @@
 """Custom exceptions for the application."""
 
 
-class AI GatewayException(Exception):
+class AIGatewayException(Exception):
     """Base exception for AI Gateway."""
     pass
 
 
-class AuthenticationError(AI GatewayException):
+class AuthenticationError(AIGatewayException):
     """Authentication failed."""
     pass
 
 
-class AuthorizationError(AI GatewayException):
+class AuthorizationError(AIGatewayException):
     """Not authorized."""
     pass
 
 
-class QuotaExceededError(AI GatewayException):
+class QuotaExceededError(AIGatewayException):
     """Quota exceeded."""
     def __init__(self, message: str = "Quota exceeded", quota_type: str = "daily"):
         self.quota_type = quota_type
         super().__init__(message)
 
 
-class RateLimitError(AI GatewayException):
+class RateLimitError(AIGatewayException):
     """Rate limit exceeded."""
     pass
 
 
-class ModelNotFoundError(AI GatewayException):
+class ModelNotFoundError(AIGatewayException):
     """Model not found."""
     pass
 
 
-class ModelError(AI GatewayException):
+class ModelError(AIGatewayException):
     """LLM model error."""
     pass
 
 
-class ValidationError(AI GatewayException):
+class ValidationError(AIGatewayException):
     """Validation error."""
     pass
 
 
-class UserNotFoundError(AI GatewayException):
+class UserNotFoundError(AIGatewayException):
     """User not found."""
     pass
 
 
-class UserAlreadyExistsError(AI GatewayException):
+class UserAlreadyExistsError(AIGatewayException):
     """User already exists."""
     pass
