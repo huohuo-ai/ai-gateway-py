@@ -22,7 +22,7 @@ redis:
 
 clickhouse:
   host: localhost
-  port: 8123
+  port: 9000
   database: ai_gateway
   username: default
   password: ""

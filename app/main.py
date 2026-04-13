@@ -9,6 +9,7 @@ from app.api.v1 import api_router
 from app.config import settings
 from app.db.clickhouse import close_clickhouse, init_clickhouse_tables
 from app.db.mysql import close_db, init_db
+from app.db.seed import seed_database
 from app.db.redis import close_redis, init_redis
 from app.middleware.audit_log import AuditLogMiddleware
 
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize databases
     await init_db()
+    await seed_database()
     await init_redis()
     init_clickhouse_tables()
     

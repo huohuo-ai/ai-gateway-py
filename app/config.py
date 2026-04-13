@@ -37,7 +37,7 @@ class RedisConfig(BaseSettings):
 
 class ClickHouseConfig(BaseSettings):
     host: str = "localhost"
-    port: int = 8123
+    port: int = 9000
     database: str = "ai_gateway"
     username: str = "default"
     password: Optional[str] = None
