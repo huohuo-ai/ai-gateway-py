@@ -21,6 +21,7 @@ from app.schemas.llm import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
+    ModelListResponse,
     Usage,
 )
 from app.schemas.audit import (
@@ -50,6 +51,7 @@ __all__ = [
     "ChatCompletionRequest",
     "ChatCompletionResponse",
     "ChatMessage",
+    "ModelListResponse",
     "Usage",
     # Audit
     "AuditLogQuery",
