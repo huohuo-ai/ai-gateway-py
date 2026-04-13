@@ -10,7 +10,7 @@ export const getModels = (params) => {
 
 export const getModel = (id) => {
   return request({
-    url: `/api/v1/admin/models/${id}`
+    url: `/api/v1/admin/models/${id}`,
     method: 'get'
   })
 }
@@ -25,7 +25,7 @@ export const createModel = (data) => {
 
 export const updateModel = (id, data) => {
   return request({
-    url: `/api/v1/admin/models/${id}`
+    url: `/api/v1/admin/models/${id}`,
     method: 'put',
     data
   })
@@ -33,7 +33,7 @@ export const updateModel = (id, data) => {
 
 export const deleteModel = (id) => {
   return request({
-    url: `/api/v1/admin/models/${id}`
+    url: `/api/v1/admin/models/${id}`,
     method: 'delete'
   })
 }
