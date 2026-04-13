@@ -49,7 +49,7 @@ async def login(
         role=user.role
     )
     
-    return LoginResponse(token=token, user=UserResponse.model_validate(user))
+    return LoginResponse(access_token=token, user=UserResponse.model_validate(user))
 
 
 @router.post("/register", response_model=LoginResponse)
@@ -86,7 +86,7 @@ async def register(
         role=user.role
     )
     
-    return LoginResponse(token=token, user=UserResponse.model_validate(user))
+    return LoginResponse(access_token=token, user=UserResponse.model_validate(user))
 
 
 @router.get("/profile", response_model=UserResponse)

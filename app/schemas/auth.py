@@ -12,7 +12,7 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     """Login response schema."""
-    token: str
+    access_token: str
     user: UserResponse
 
 
