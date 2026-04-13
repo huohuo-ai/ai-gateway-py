@@ -20,7 +20,10 @@ from app.schemas.ai_model import (
 from app.schemas.llm import (
     ChatCompletionRequest,
     ChatCompletionResponse,
+    ChatCompletionStreamResponse,
     ChatMessage,
+    Choice,
+    StreamChoice,
     ModelListResponse,
     Usage,
 )
@@ -28,7 +31,10 @@ from app.schemas.audit import (
     AuditLogQuery,
     AuditLogResponse,
     RiskEventResponse,
+    RiskEventResolveRequest,
+    UserStatistics,
     DashboardStats,
+    PaginatedResponse,
 )
 
 __all__ = [
@@ -50,12 +56,18 @@ __all__ = [
     # LLM
     "ChatCompletionRequest",
     "ChatCompletionResponse",
+    "ChatCompletionStreamResponse",
     "ChatMessage",
+    "Choice",
+    "StreamChoice",
     "ModelListResponse",
     "Usage",
     # Audit
     "AuditLogQuery",
     "AuditLogResponse",
     "RiskEventResponse",
+    "RiskEventResolveRequest",
+    "UserStatistics",
     "DashboardStats",
+    "PaginatedResponse",
 ]
