@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
 class ServerConfig(BaseSettings):
@@ -75,8 +75,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        yaml_file="config.yaml",
-        yaml_file_encoding="utf-8",
+        env_nested_delimiter="__",
         extra="ignore"
     )
 
@@ -89,6 +88,33 @@ class Settings(BaseSettings):
     default_quota: DefaultQuotaConfig = Field(default_factory=DefaultQuotaConfig)
     rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        try:
+            from pydantic_settings.sources import YamlConfigSettingsSource
+
+            yaml_config = YamlConfigSettingsSource(
+                settings_cls,
+                yaml_file="config.yaml",
+                yaml_file_encoding="utf-8",
+            )
+        except Exception:
+            yaml_config = env_settings
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            yaml_config,
+            file_secret_settings,
+        )
 
 
 @lru_cache()

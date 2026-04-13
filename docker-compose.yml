@@ -77,6 +77,12 @@ services:
     environment:
       - PYTHONPATH=/app
       - CONFIG_PATH=/app/config.yaml
+      - DATABASE__HOST=mysql
+      - DATABASE__PORT=3306
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+      - CLICKHOUSE__HOST=clickhouse
+      - CLICKHOUSE__PORT=9000
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     depends_on:
