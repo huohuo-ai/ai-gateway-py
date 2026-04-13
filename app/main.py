@@ -82,5 +82,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=settings.server.port,
         reload=settings.server.reload,
-        debug=settings.server.debug,
     )
