@@ -90,22 +90,22 @@ const rules = {
 const handleLogin = async () => {
   if (!formRef.value) return
   
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    
+  try {
+    await formRef.value.validate()
     loading.value = true
-    try {
-      await userStore.login(form)
-      await userStore.fetchUserInfo()
-      ElMessage.success('登录成功')
-      router.push('/')
-    } catch (error) {
-      console.error(error)
-      ElMessage.error(error?.response?.data?.detail || '登录失败，请检查用户名和密码')
-    } finally {
-      loading.value = false
-    }
-  })
+    const res = await userStore.login(form)
+    console.log('login success, token:', res.access_token)
+    await userStore.fetchUserInfo()
+    console.log('fetchUserInfo success')
+    ElMessage.success('登录成功')
+    await router.push('/')
+    console.log('router push done')
+  } catch (error) {
+    console.error('login error:', error)
+    ElMessage.error(error?.response?.data?.detail || error?.message || '登录失败，请检查用户名和密码')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
