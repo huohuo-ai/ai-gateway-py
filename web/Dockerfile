@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Configure Alibaba Cloud mirror for faster apk downloads in China
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
 # 使用国内镜像加速
 RUN npm config set registry https://registry.npmmirror.com
 
@@ -14,6 +17,9 @@ RUN npm run build
 
 # 生产阶段
 FROM nginx:alpine
+
+# Configure Alibaba Cloud mirror for faster apk downloads in China
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
