@@ -86,7 +86,7 @@ def decode_access_token(token: str) -> Optional[dict[str, Any]]:
 
 def generate_api_key() -> str:
     """Generate a new API key."""
-    return f"{API_KEY_PREFIX}{ULID().lower()}"
+    return f"{API_KEY_PREFIX}{str(ULID()).lower()}"
 
 
 def generate_uuid() -> str:
