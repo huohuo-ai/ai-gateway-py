@@ -25,7 +25,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_database()
     init_clickhouse_tables()
-    await seed_demo_data()
+    try:
+        await seed_demo_data()
+    except Exception as e:
+        print(f"⚠️ Demo data seeding failed: {e}")
     await init_redis()
     
     print("✅ Databases initialized")

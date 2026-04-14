@@ -130,7 +130,7 @@ class UserService:
         status: Optional[UserStatus] = None
     ) -> tuple[list[User], int]:
         """List users with pagination."""
-        query = select(User)
+        query = select(User).options(selectinload(User.quota))
         
         if role:
             query = query.where(User.role == role)

@@ -27,14 +27,17 @@ class AuditService:
         page_size: int = 20
     ) -> dict:
         """Query audit logs."""
-        logs, total = query_audit_logs(
-            start_time=start_time,
-            end_time=end_time,
-            user_id=user_id,
-            model_name=model_name,
-            page=page,
-            page_size=page_size
-        )
+        try:
+            logs, total = query_audit_logs(
+                start_time=start_time,
+                end_time=end_time,
+                user_id=user_id,
+                model_name=model_name,
+                page=page,
+                page_size=page_size
+            )
+        except Exception:
+            logs, total = [], 0
         
         return {
             "data": logs,
@@ -57,13 +60,16 @@ class AuditService:
         if not end_time:
             end_time = datetime.utcnow()
         
-        return get_risk_events(
-            start_time=start_time,
-            end_time=end_time,
-            risk_level=risk_level,
-            page=page,
-            page_size=page_size
-        )
+        try:
+            return get_risk_events(
+                start_time=start_time,
+                end_time=end_time,
+                risk_level=risk_level,
+                page=page,
+                page_size=page_size
+            )
+        except Exception:
+            return [], 0
     
     async def get_user_statistics(
         self,
@@ -72,122 +78,145 @@ class AuditService:
         end_date: str
     ) -> list[dict]:
         """Get user usage statistics."""
-        # Query from ClickHouse
-        from app.db.clickhouse import get_clickhouse
-        
-        client = get_clickhouse()
-        
-        result = client.execute(
-            """
-            SELECT 
-                toDate(timestamp) as date,
-                count() as total_requests,
-                sum(total_tokens) as total_tokens,
-                sum(prompt_tokens) as prompt_tokens,
-                sum(completion_tokens) as completion_tokens
-            FROM audit_logs
-            WHERE user_id = %(user_id)s
-              AND toDate(timestamp) >= %(start_date)s
-              AND toDate(timestamp) <= %(end_date)s
-            GROUP BY date
-            ORDER BY date
-            """,
-            {
-                "user_id": user_id,
-                "start_date": start_date,
-                "end_date": end_date,
-            }
-        )
-        
-        stats = []
-        for row in result:
-            stats.append({
-                "date": row[0].strftime("%Y-%m-%d"),
-                "total_requests": row[1],
-                "total_tokens": row[2],
-                "prompt_tokens": row[3],
-                "completion_tokens": row[4],
-            })
-        
-        return stats
+        try:
+            from app.db.clickhouse import get_clickhouse
+            
+            client = get_clickhouse()
+            
+            result = client.execute(
+                """
+                SELECT 
+                    toDate(timestamp) as date,
+                    count() as total_requests,
+                    sum(total_tokens) as total_tokens,
+                    sum(prompt_tokens) as prompt_tokens,
+                    sum(completion_tokens) as completion_tokens
+                FROM audit_logs
+                WHERE user_id = %(user_id)s
+                  AND toDate(timestamp) >= %(start_date)s
+                  AND toDate(timestamp) <= %(end_date)s
+                GROUP BY date
+                ORDER BY date
+                """,
+                {
+                    "user_id": user_id,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                }
+            )
+            
+            stats = []
+            for row in result:
+                date_val = row[0]
+                if hasattr(date_val, "strftime"):
+                    date_str = date_val.strftime("%Y-%m-%d")
+                else:
+                    date_str = str(date_val)
+                stats.append({
+                    "date": date_str,
+                    "total_requests": row[1],
+                    "total_tokens": row[2],
+                    "prompt_tokens": row[3],
+                    "completion_tokens": row[4],
+                })
+            
+            return stats
+        except Exception:
+            return []
     
     async def get_dashboard_stats(self) -> dict:
         """Get dashboard statistics."""
-        from app.db.clickhouse import get_clickhouse
-        
-        client = get_clickhouse()
-        stats = {}
-        
-        # Today's requests
-        result = client.execute(
-            "SELECT count() FROM audit_logs WHERE toDate(timestamp) = today()"
-        )
-        stats["today_requests"] = result[0][0] if result else 0
-        
-        # Today's tokens
-        result = client.execute(
-            "SELECT sum(total_tokens) FROM audit_logs WHERE toDate(timestamp) = today()"
-        )
-        stats["today_tokens"] = result[0][0] if result else 0
-        
-        # Active users today
-        result = client.execute(
-            "SELECT uniqExact(user_id) FROM audit_logs WHERE toDate(timestamp) = today()"
-        )
-        stats["active_users"] = result[0][0] if result else 0
-        
-        # Risk events today
-        result = client.execute(
-            "SELECT count() FROM risk_events WHERE toDate(timestamp) = today()"
-        )
-        stats["risk_events"] = result[0][0] if result else 0
-        
-        # 7-day trends
-        result = client.execute(
-            """
-            SELECT 
-                toDate(timestamp) as date,
-                count() as requests,
-                sum(total_tokens) as tokens
-            FROM audit_logs
-            WHERE timestamp >= now() - INTERVAL 7 DAY
-            GROUP BY date
-            ORDER BY date
-            """
-        )
-        trends = []
-        for row in result:
-            trends.append({
-                "date": row[0].strftime("%Y-%m-%d"),
-                "requests": row[1],
-                "tokens": row[2],
-            })
-        stats["trends"] = trends
-        
-        # Model usage today
-        result = client.execute(
-            """
-            SELECT 
-                model_name,
-                count() as requests,
-                sum(total_tokens) as tokens
-            FROM audit_logs
-            WHERE toDate(timestamp) = today()
-            GROUP BY model_name
-            ORDER BY requests DESC
-            LIMIT 10
-            """
-        )
-        model_stats = []
-        for row in result:
-            model_stats.append({
-                "model_name": row[0],
-                "requests": row[1],
-                "tokens": row[2],
-            })
-        stats["model_stats"] = model_stats
-        
-        return stats
+        try:
+            from app.db.clickhouse import get_clickhouse
+            
+            client = get_clickhouse()
+            stats = {}
+            
+            # Today's requests
+            result = client.execute(
+                "SELECT count() FROM audit_logs WHERE toDate(timestamp) = today()"
+            )
+            stats["today_requests"] = result[0][0] if result else 0
+            
+            # Today's tokens
+            result = client.execute(
+                "SELECT sum(total_tokens) FROM audit_logs WHERE toDate(timestamp) = today()"
+            )
+            val = result[0][0] if result else 0
+            stats["today_tokens"] = val or 0
+            
+            # Active users today
+            result = client.execute(
+                "SELECT uniqExact(user_id) FROM audit_logs WHERE toDate(timestamp) = today()"
+            )
+            stats["active_users"] = result[0][0] if result else 0
+            
+            # Risk events today
+            result = client.execute(
+                "SELECT count() FROM risk_events WHERE toDate(timestamp) = today()"
+            )
+            stats["risk_events"] = result[0][0] if result else 0
+            
+            # 7-day trends
+            result = client.execute(
+                """
+                SELECT 
+                    toDate(timestamp) as date,
+                    count() as requests,
+                    sum(total_tokens) as tokens
+                FROM audit_logs
+                WHERE timestamp >= now() - INTERVAL 7 DAY
+                GROUP BY date
+                ORDER BY date
+                """
+            )
+            trends = []
+            for row in result:
+                date_val = row[0]
+                if hasattr(date_val, "strftime"):
+                    date_str = date_val.strftime("%Y-%m-%d")
+                else:
+                    date_str = str(date_val)
+                trends.append({
+                    "date": date_str,
+                    "requests": row[1],
+                    "tokens": row[2] or 0,
+                })
+            stats["trends"] = trends
+            
+            # Model usage today
+            result = client.execute(
+                """
+                SELECT 
+                    model_name,
+                    count() as requests,
+                    sum(total_tokens) as tokens
+                FROM audit_logs
+                WHERE toDate(timestamp) = today()
+                GROUP BY model_name
+                ORDER BY requests DESC
+                LIMIT 10
+                """
+            )
+            model_stats = []
+            for row in result:
+                model_stats.append({
+                    "model_name": row[0],
+                    "requests": row[1],
+                    "tokens": row[2] or 0,
+                })
+            stats["model_stats"] = model_stats
+            
+            return stats
+        except Exception:
+            return {
+                "today_requests": 0,
+                "today_tokens": 0,
+                "active_users": 0,
+                "risk_events": 0,
+                "trends": [],
+                "model_stats": [],
+            }
     
     async def resolve_risk_event(
         self,
@@ -196,20 +225,23 @@ class AuditService:
         note: str = ""
     ) -> bool:
         """Resolve a risk event."""
-        from app.db.clickhouse import get_clickhouse
-        
-        client = get_clickhouse()
-        client.execute(
-            """
-            ALTER TABLE risk_events
-            UPDATE is_resolved = 1, resolved_by = %(resolved_by)s, 
-                   resolved_at = now(), note = %(note)s
-            WHERE event_id = %(event_id)s
-            """,
-            {
-                "event_id": event_id,
-                "resolved_by": resolved_by,
-                "note": note,
-            }
-        )
-        return True
+        try:
+            from app.db.clickhouse import get_clickhouse
+            
+            client = get_clickhouse()
+            client.execute(
+                """
+                ALTER TABLE risk_events
+                UPDATE is_resolved = 1, resolved_by = %(resolved_by)s, 
+                       resolved_at = now(), note = %(note)s
+                WHERE event_id = %(event_id)s
+                """,
+                {
+                    "event_id": event_id,
+                    "resolved_by": resolved_by,
+                    "note": note,
+                }
+            )
+            return True
+        except Exception:
+            return False

@@ -1,5 +1,4 @@
 """Audit Analyzer - natural language interface for audit data."""
-import re
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -12,10 +11,16 @@ class AuditAnalyzer:
     def __init__(self, user_id: int, username: str):
         self.user_id = user_id
         self.username = username
-        self.client = get_clickhouse()
+        try:
+            self.client = get_clickhouse()
+        except Exception:
+            self.client = None
 
     async def analyze(self, question: str) -> str:
         """Main entry: parse question and generate answer."""
+        if not self.client:
+            return "❌ 审计数据库暂不可用，请稍后重试。"
+
         q = question.lower().strip()
 
         # Intent routing
@@ -64,23 +69,26 @@ class AuditAnalyzer:
 
     async def _summary_stats(self) -> str:
         """Dashboard-like summary."""
-        # Today
-        result = self.client.execute(
-            "SELECT count(), sum(total_tokens), uniqExact(user_id) FROM audit_logs WHERE toDate(timestamp) = today()"
-        )
-        today_reqs, today_tokens, today_users = result[0] if result else (0, 0, 0)
+        try:
+            # Today
+            result = self.client.execute(
+                "SELECT count(), sum(total_tokens), uniqExact(user_id) FROM audit_logs WHERE toDate(timestamp) = today()"
+            )
+            today_reqs, today_tokens, today_users = result[0] if result else (0, 0, 0)
 
-        # Last 7 days
-        result = self.client.execute(
-            "SELECT count(), sum(total_tokens), uniqExact(user_id) FROM audit_logs WHERE timestamp >= now() - INTERVAL 7 DAY"
-        )
-        week_reqs, week_tokens, week_users = result[0] if result else (0, 0, 0)
+            # Last 7 days
+            result = self.client.execute(
+                "SELECT count(), sum(total_tokens), uniqExact(user_id) FROM audit_logs WHERE timestamp >= now() - INTERVAL 7 DAY"
+            )
+            week_reqs, week_tokens, week_users = result[0] if result else (0, 0, 0)
 
-        # Risk events today
-        result = self.client.execute(
-            "SELECT count() FROM risk_events WHERE toDate(timestamp) = today()"
-        )
-        today_risks = result[0][0] if result else 0
+            # Risk events today
+            result = self.client.execute(
+                "SELECT count() FROM risk_events WHERE toDate(timestamp) = today()"
+            )
+            today_risks = result[0][0] if result else 0
+        except Exception:
+            return "❌ 查询审计数据时出错，请稍后重试。"
 
         return (
             f"📊 **审计数据概览**\n\n"
@@ -97,18 +105,22 @@ class AuditAnalyzer:
 
     async def _top_users(self) -> str:
         """Top users by tokens."""
-        result = self.client.execute(
-            """
-            SELECT user_name, count(), sum(total_tokens), avg(latency_ms)
-            FROM audit_logs
-            WHERE timestamp >= now() - INTERVAL 7 DAY
-            GROUP BY user_name
-            ORDER BY sum(total_tokens) DESC
-            LIMIT 5
-            """
-        )
+        try:
+            result = self.client.execute(
+                """
+                SELECT user_name, count(), sum(total_tokens), avg(latency_ms)
+                FROM audit_logs
+                WHERE timestamp >= now() - INTERVAL 7 DAY
+                GROUP BY user_name
+                ORDER BY sum(total_tokens) DESC
+                LIMIT 5
+                """
+            )
+        except Exception:
+            return "❌ 查询用户排行时出错。"
+
         if not result:
-            return "近7天暂无语义数据。"
+            return "近7天暂无审计数据。"
 
         lines = ["🏆 **近7天最活跃用户（按 Token 消耗）**\n"]
         for i, row in enumerate(result, 1):
@@ -119,15 +131,19 @@ class AuditAnalyzer:
 
     async def _risk_events(self) -> str:
         """Recent risk events."""
-        result = self.client.execute(
-            """
-            SELECT risk_level, count(), sum(is_resolved)
-            FROM risk_events
-            WHERE timestamp >= now() - INTERVAL 7 DAY
-            GROUP BY risk_level
-            ORDER BY count() DESC
-            """
-        )
+        try:
+            result = self.client.execute(
+                """
+                SELECT risk_level, count(), sum(is_resolved)
+                FROM risk_events
+                WHERE timestamp >= now() - INTERVAL 7 DAY
+                GROUP BY risk_level
+                ORDER BY count() DESC
+                """
+            )
+        except Exception:
+            return "❌ 查询风险事件时出错。"
+
         if not result:
             return "近7天暂无风险事件。"
 
@@ -143,15 +159,19 @@ class AuditAnalyzer:
         lines.append(f"\n总计：`{total}` 条风险事件，已处理 `{int(resolved)}` 条，待处理 `{total - int(resolved)}` 条。")
 
         # Recent 3 details
-        details = self.client.execute(
-            """
-            SELECT risk_level, risk_reason, description, user_name, is_resolved
-            FROM risk_events
-            WHERE timestamp >= now() - INTERVAL 7 DAY
-            ORDER BY timestamp DESC
-            LIMIT 3
-            """
-        )
+        try:
+            details = self.client.execute(
+                """
+                SELECT risk_level, risk_reason, description, user_name, is_resolved
+                FROM risk_events
+                WHERE timestamp >= now() - INTERVAL 7 DAY
+                ORDER BY timestamp DESC
+                LIMIT 3
+                """
+            )
+        except Exception:
+            details = []
+
         if details:
             lines.append("\n**最新风险事件：**")
             for d in details:
@@ -162,35 +182,43 @@ class AuditAnalyzer:
 
     async def _model_stats(self) -> str:
         """Model usage stats."""
-        result = self.client.execute(
-            """
-            SELECT model_name, count(), sum(total_tokens)
-            FROM audit_logs
-            WHERE timestamp >= now() - INTERVAL 7 DAY
-            GROUP BY model_name
-            ORDER BY count() DESC
-            LIMIT 5
-            """
-        )
+        try:
+            result = self.client.execute(
+                """
+                SELECT model_name, count(), sum(total_tokens)
+                FROM audit_logs
+                WHERE timestamp >= now() - INTERVAL 7 DAY
+                GROUP BY model_name
+                ORDER BY count() DESC
+                LIMIT 5
+                """
+            )
+        except Exception:
+            return "❌ 查询模型统计时出错。"
+
         if not result:
             return "近7天暂无模型调用数据。"
 
         lines = ["🤖 **近7天模型使用排行**\n"]
         for i, row in enumerate(result, 1):
-            lines.append(f"{i}. **{row[0]}** — 请求 `{row[1]}`，Token `{row[2]}`")
+            lines.append(f"{i}. **{row[0]}** — 请求 `{row[1]}`，Token `{row[2] or 0}`")
         return "\n".join(lines)
 
     async def _usage_trend(self) -> str:
         """7-day trend."""
-        result = self.client.execute(
-            """
-            SELECT toDate(timestamp) as date, count(), sum(total_tokens)
-            FROM audit_logs
-            WHERE timestamp >= now() - INTERVAL 7 DAY
-            GROUP BY date
-            ORDER BY date
-            """
-        )
+        try:
+            result = self.client.execute(
+                """
+                SELECT toDate(timestamp) as date, count(), sum(total_tokens)
+                FROM audit_logs
+                WHERE timestamp >= now() - INTERVAL 7 DAY
+                GROUP BY date
+                ORDER BY date
+                """
+            )
+        except Exception:
+            return "❌ 查询趋势数据时出错。"
+
         if not result:
             return "近7天暂无趋势数据。"
 
@@ -198,33 +226,37 @@ class AuditAnalyzer:
         lines.append("| 日期 | 请求数 | Token 消耗 |")
         lines.append("|------|--------|------------|")
         for row in result:
-            date_str = row[0].strftime("%Y-%m-%d") if hasattr(row[0], "strftime") else str(row[0])
-            lines.append(f"| {date_str} | {row[1]} | {row[2]} |")
+            date_val = row[0]
+            date_str = date_val.strftime("%Y-%m-%d") if hasattr(date_val, "strftime") else str(date_val)
+            lines.append(f"| {date_str} | {row[1]} | {row[2] or 0} |")
         return "\n".join(lines)
 
     async def _my_usage(self) -> str:
         """Current user's usage."""
-        result = self.client.execute(
-            """
-            SELECT count(), sum(total_tokens), avg(latency_ms)
-            FROM audit_logs
-            WHERE user_id = %(user_id)s
-              AND timestamp >= now() - INTERVAL 7 DAY
-            """,
-            {"user_id": self.user_id}
-        )
-        row = result[0] if result else (0, 0, 0)
+        try:
+            result = self.client.execute(
+                """
+                SELECT count(), sum(total_tokens), avg(latency_ms)
+                FROM audit_logs
+                WHERE user_id = %(user_id)s
+                  AND timestamp >= now() - INTERVAL 7 DAY
+                """,
+                {"user_id": self.user_id}
+            )
+            row = result[0] if result else (0, 0, 0)
 
-        result2 = self.client.execute(
-            """
-            SELECT count(), sum(total_tokens)
-            FROM audit_logs
-            WHERE user_id = %(user_id)s
-              AND toDate(timestamp) = today()
-            """,
-            {"user_id": self.user_id}
-        )
-        today = result2[0] if result2 else (0, 0)
+            result2 = self.client.execute(
+                """
+                SELECT count(), sum(total_tokens)
+                FROM audit_logs
+                WHERE user_id = %(user_id)s
+                  AND toDate(timestamp) = today()
+                """,
+                {"user_id": self.user_id}
+            )
+            today = result2[0] if result2 else (0, 0)
+        except Exception:
+            return "❌ 查询个人用量时出错。"
 
         return (
             f"👤 **你的调用统计（{self.username}）**\n\n"

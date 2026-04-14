@@ -26,6 +26,7 @@ async def list_models(
         from datetime import datetime
         data.append({
             "id": m.get("model_id", str(m.get("id"))),
+            "name": m.get("name", m.get("model_id", str(m.get("id")))),
             "object": "model",
             "created": int(datetime.utcnow().timestamp()),
             "owned_by": m.get("provider", "custom"),

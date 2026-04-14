@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.constants import ModelProvider, ModelStatus, UserRole, UserStatus
 from app.core.security import generate_api_key, get_password_hash
-from app.db.clickhouse import insert_audit_log, insert_risk_event
+from app.db.clickhouse import get_clickhouse
 from app.db.mysql import AsyncSessionLocal
 from app.models import User, UserQuota
 from app.models.ai_model import AIModel
@@ -267,8 +267,10 @@ async def _update_quota_usage(session, users: list[User]) -> None:
 
 
 def _seed_clickhouse_audit_logs(users: list[User]) -> None:
-    """Seed ClickHouse audit_logs."""
-    # Generate ~800 audit logs
+    """Seed ClickHouse audit_logs in bulk."""
+    client = get_clickhouse()
+    rows = []
+
     for user in users:
         if user.status != UserStatus.ACTIVE:
             continue
@@ -283,33 +285,33 @@ def _seed_clickhouse_audit_logs(users: list[User]) -> None:
             has_error = random.random() < 0.1
             status_code = 500 if has_error else random.choice([200, 200, 200, 429])
 
-            insert_audit_log({
-                "timestamp": req_time,
-                "request_id": str(uuid.uuid4()),
-                "user_id": user.id,
-                "user_name": user.username,
-                "user_email": user.email,
-                "request_time": req_time,
-                "request_method": "POST",
-                "request_path": "/v1/chat/completions",
-                "request_ip": _random_ip(),
-                "user_agent": random.choice(USER_AGENTS),
-                "request_headers": "{\"Content-Type\": \"application/json\"}",
-                "request_body": "{\"model\": \"gpt-4\", \"messages\": [...]}",
-                "model_name": random.choice(MODEL_NAMES),
-                "model_provider": random.choice(["openai", "anthropic", "azure"]),
-                "response_time": resp_time,
-                "response_status": status_code,
-                "response_body": "{\"choices\": [...]}" if not has_error else "{\"error\": \"timeout\"}",
-                "response_headers": "{}",
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": total,
-                "latency_ms": latency,
-                "is_stream": random.random() < 0.3,
-                "has_error": has_error,
-                "error_message": "timeout" if has_error else "",
-            })
+            rows.append((
+                req_time,
+                str(uuid.uuid4()),
+                user.id,
+                user.username,
+                user.email,
+                req_time,
+                "POST",
+                "/v1/chat/completions",
+                _random_ip(),
+                random.choice(USER_AGENTS),
+                "{\"Content-Type\": \"application/json\"}",
+                "{\"model\": \"gpt-4\", \"messages\": [...]}"[:10000],
+                random.choice(MODEL_NAMES),
+                random.choice(["openai", "anthropic", "azure"]),
+                resp_time,
+                status_code,
+                "{\"choices\": [...]}" if not has_error else "{\"error\": \"timeout\"}",
+                "{}",
+                prompt_tokens,
+                completion_tokens,
+                total,
+                latency,
+                random.random() < 0.3,
+                has_error,
+                "timeout" if has_error else "",
+            ))
 
     # Admin logs
     admin_user = next((u for u in users if u.username == "admin"), None)
@@ -318,39 +320,56 @@ def _seed_clickhouse_audit_logs(users: list[User]) -> None:
             req_time = _random_time_in_last_days(30)
             latency = random.randint(100, 2000)
             resp_time = req_time + timedelta(milliseconds=latency)
-            insert_audit_log({
-                "timestamp": req_time,
-                "request_id": str(uuid.uuid4()),
-                "user_id": admin_user.id,
-                "user_name": admin_user.username,
-                "user_email": admin_user.email,
-                "request_time": req_time,
-                "request_method": random.choice(["GET", "GET", "POST"]),
-                "request_path": random.choice(REQUEST_PATHS),
-                "request_ip": _random_ip(),
-                "user_agent": random.choice(USER_AGENTS),
-                "request_headers": "{}",
-                "request_body": "",
-                "model_name": random.choice(MODEL_NAMES),
-                "model_provider": "openai",
-                "response_time": resp_time,
-                "response_status": 200,
-                "response_body": "{}",
-                "response_headers": "{}",
-                "prompt_tokens": random.randint(0, 500),
-                "completion_tokens": random.randint(0, 300),
-                "total_tokens": random.randint(0, 800),
-                "latency_ms": latency,
-                "is_stream": False,
-                "has_error": False,
-                "error_message": "",
-            })
+            rows.append((
+                req_time,
+                str(uuid.uuid4()),
+                admin_user.id,
+                admin_user.username,
+                admin_user.email,
+                req_time,
+                random.choice(["GET", "GET", "POST"]),
+                random.choice(REQUEST_PATHS),
+                _random_ip(),
+                random.choice(USER_AGENTS),
+                "{}",
+                "",
+                random.choice(MODEL_NAMES),
+                "openai",
+                resp_time,
+                200,
+                "{}",
+                "{}",
+                random.randint(0, 500),
+                random.randint(0, 300),
+                random.randint(0, 800),
+                latency,
+                False,
+                False,
+                "",
+            ))
+
+    if rows:
+        client.execute(
+            """
+            INSERT INTO audit_logs (
+                timestamp, request_id, user_id, user_name, user_email,
+                request_time, request_method, request_path, request_ip, user_agent,
+                request_headers, request_body, model_name, model_provider,
+                response_time, response_status, response_body, response_headers,
+                prompt_tokens, completion_tokens, total_tokens, latency_ms,
+                is_stream, has_error, error_message
+            ) VALUES
+            """,
+            rows
+        )
 
 
 def _seed_clickhouse_risk_events(users: list[User]) -> None:
-    """Seed ClickHouse risk_events."""
+    """Seed ClickHouse risk_events in bulk."""
+    client = get_clickhouse()
     risk_levels = ["low", "medium", "high", "critical"]
     risk_types = ["token_abuse", "off_hours_access", "sensitive_info", "abnormal_frequency", "ip_anomaly", "abnormal_pattern"]
+    rows = []
 
     active_users = [u for u in users if u.status == UserStatus.ACTIVE]
     for _ in range(35):
@@ -359,26 +378,40 @@ def _seed_clickhouse_risk_events(users: list[User]) -> None:
         level = random.choices(risk_levels, weights=[30, 30, 25, 15])[0]
         resolved = random.random() < 0.4 if level in ["low", "medium"] else False
         timestamp = _random_time_in_last_days(14)
+        resolved_at = timestamp + timedelta(hours=2) if resolved else datetime(1970, 1, 1)
 
-        insert_risk_event({
-            "timestamp": timestamp,
-            "event_id": str(uuid.uuid4()),
-            "request_id": str(uuid.uuid4()),
-            "user_id": user.id,
-            "user_name": user.username,
-            "risk_level": level,
-            "risk_type": random.choice(risk_types),
-            "risk_score": round(random.uniform(0.3, 0.95), 2),
-            "risk_reason": RISK_REASONS[idx],
-            "description": RISK_DESCRIPTIONS[idx],
-            "evidence": "{\"requests\": 120, \"tokens\": 500000}",
-            "request_ip": _random_ip(),
-            "model_name": random.choice(MODEL_NAMES),
-            "is_resolved": resolved,
-            "resolved_by": "admin" if resolved else "",
-            "resolved_at": timestamp + timedelta(hours=2) if resolved else datetime(1970, 1, 1),
-            "note": "已处理" if resolved else "",
-        })
+        rows.append((
+            timestamp,
+            str(uuid.uuid4()),
+            str(uuid.uuid4()),
+            user.id,
+            user.username,
+            level,
+            random.choice(risk_types),
+            round(random.uniform(0.3, 0.95), 2),
+            RISK_REASONS[idx],
+            RISK_DESCRIPTIONS[idx],
+            "{\"requests\": 120, \"tokens\": 500000}",
+            _random_ip(),
+            random.choice(MODEL_NAMES),
+            resolved,
+            "admin" if resolved else "",
+            resolved_at,
+            "已处理" if resolved else "",
+        ))
+
+    if rows:
+        client.execute(
+            """
+            INSERT INTO risk_events (
+                timestamp, event_id, request_id, user_id, user_name,
+                risk_level, risk_type, risk_score, risk_reason, description,
+                evidence, request_ip, model_name, is_resolved, resolved_by,
+                resolved_at, note
+            ) VALUES
+            """,
+            rows
+        )
 
 
 async def seed_demo_data() -> None:
@@ -401,17 +434,18 @@ async def seed_demo_data() -> None:
         if not users:
             return
 
-        # Commit MySQL inserts so far
-        await session.commit()
-
         # 4. Seed usage logs
         await _seed_usage_logs(session, users, models)
-        await session.commit()
 
         # 5. Update quota usage
         await _update_quota_usage(session, users)
+
+        # Commit MySQL inserts
         await session.commit()
 
-    # 6. Seed ClickHouse data (synchronous)
-    _seed_clickhouse_audit_logs(users)
-    _seed_clickhouse_risk_events(users)
+    # 6. Seed ClickHouse data (synchronous, bulk insert)
+    try:
+        _seed_clickhouse_audit_logs(users)
+        _seed_clickhouse_risk_events(users)
+    except Exception as e:
+        print(f"Warning: ClickHouse demo data insertion failed: {e}")
