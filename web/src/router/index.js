@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import Cookies from 'js-cookie'
 import { useUserStore } from '@/store/user'
 
 const routes = [
@@ -72,10 +73,11 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
-  
-  if (!to.meta.public && !userStore.token) {
+  const token = userStore.token || Cookies.get('ai_gateway_token')
+
+  if (!to.meta.public && !token) {
     next('/login')
-  } else if (to.path === '/login' && userStore.token) {
+  } else if (to.path === '/login' && token) {
     next('/')
   } else {
     next()

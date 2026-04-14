@@ -6,7 +6,7 @@
         <h1 class="login-title">AI Gateway</h1>
         <p class="login-subtitle">企业级AI网关管理系统</p>
       </div>
-      
+
       <el-form
         ref="formRef"
         :model="form"
@@ -22,7 +22,7 @@
             clearable
           />
         </el-form-item>
-        
+
         <el-form-item prop="password">
           <el-input
             v-model="form.password"
@@ -33,7 +33,7 @@
             clearable
           />
         </el-form-item>
-        
+
         <el-form-item>
           <el-button
             type="primary"
@@ -45,12 +45,12 @@
           </el-button>
         </el-form-item>
       </el-form>
-      
+
       <div class="login-footer">
         <p>默认账号: admin / admin123</p>
       </div>
     </el-card>
-    
+
     <div class="login-bg">
       <div class="bg-circle circle-1"></div>
       <div class="bg-circle circle-2"></div>
@@ -89,20 +89,18 @@ const rules = {
 
 const handleLogin = async () => {
   if (!formRef.value) return
-  
+
   try {
     await formRef.value.validate()
     loading.value = true
-    const res = await userStore.login(form)
-    console.log('login success, token:', res.access_token)
-    await userStore.fetchUserInfo()
-    console.log('fetchUserInfo success')
+    await userStore.login(form)
     ElMessage.success('登录成功')
-    await router.push('/')
-    console.log('router push done')
+    await router.replace('/')
   } catch (error) {
     console.error('login error:', error)
-    ElMessage.error(error?.response?.data?.detail || error?.message || '登录失败，请检查用户名和密码')
+    const detail = error?.response?.data?.detail
+    const msg = detail || error?.message || '登录失败，请检查用户名和密码'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }

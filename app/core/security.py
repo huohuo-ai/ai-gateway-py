@@ -77,6 +77,9 @@ def decode_access_token(token: str) -> Optional[dict[str, Any]]:
         return None
     except jwt.InvalidTokenError:
         return None
+    except Exception:
+        # Catch any other decoding errors (e.g. library version differences)
+        return None
 
 
 # API Key generation

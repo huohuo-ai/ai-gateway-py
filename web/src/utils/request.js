@@ -1,5 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import Cookies from 'js-cookie'
+import router from '@/router'
 import { useUserStore } from '@/store/user'
 
 // 创建 axios 实例
@@ -15,8 +17,9 @@ const request = axios.create({
 request.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
-    if (userStore.token) {
-      config.headers.Authorization = `Bearer ${userStore.token}`
+    const token = userStore.token || Cookies.get('ai_gateway_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -29,25 +32,27 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => {
     const res = response.data
-    
+
     // 如果后端返回错误
     if (res.code && res.code !== 200) {
       ElMessage.error(res.message || '请求失败')
       return Promise.reject(new Error(res.message))
     }
-    
+
     return res
   },
   (error) => {
     const { response } = error
-    
+
     if (response) {
       switch (response.status) {
         case 401:
           ElMessage.error('登录已过期，请重新登录')
-          const userStore = useUserStore()
-          userStore.logout()
-          window.location.href = '/login'
+          {
+            const userStore = useUserStore()
+            userStore.logout()
+            router.push('/login')
+          }
           break
         case 403:
           ElMessage.error('没有权限执行此操作')
@@ -67,7 +72,7 @@ request.interceptors.response.use(
     } else {
       ElMessage.error('网络错误，请检查网络连接')
     }
-    
+
     return Promise.reject(error)
   }
 )

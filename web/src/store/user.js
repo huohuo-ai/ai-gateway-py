@@ -30,13 +30,23 @@ export const useUserStore = defineStore('user', () => {
   const login = async (credentials) => {
     const res = await loginApi(credentials)
     setToken(res.access_token)
+    // 登录接口已经返回了完整用户信息，直接复用
+    if (res.user) {
+      userInfo.value = res.user
+    }
     return res
   }
 
   const fetchUserInfo = async () => {
-    const res = await getUserInfo()
-    userInfo.value = res
-    return res
+    try {
+      const res = await getUserInfo()
+      userInfo.value = res
+      return res
+    } catch (error) {
+      console.error('fetchUserInfo failed:', error)
+      // 失败时返回默认值，避免阻塞流程
+      return null
+    }
   }
 
   const logout = () => {
