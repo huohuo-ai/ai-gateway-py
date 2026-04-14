@@ -19,6 +19,7 @@ email-validator==2.1.0
 pyjwt==2.8.0
 bcrypt==4.1.2
 passlib[bcrypt]==1.7.4
+cryptography==42.0.5
 
 # HTTP Client
 httpx==0.26.0
