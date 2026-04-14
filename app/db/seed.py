@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.core.constants import PatternType, RiskLevel, UserRole, UserStatus
+from app.core.security import get_password_hash
 from app.db.mysql import AsyncSessionLocal
 from app.models.prompt_pattern import PromptPattern
 from app.models.user import User, UserQuota
@@ -23,7 +24,7 @@ async def seed_database() -> None:
                 uuid=admin_uuid,
                 username="admin",
                 email="admin@example.com",
-                password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewKyNiAYMyzJ/I3K",
+                password=get_password_hash("admin123"),
                 role=UserRole.ADMIN,
                 status=UserStatus.ACTIVE,
                 api_key=api_key,
