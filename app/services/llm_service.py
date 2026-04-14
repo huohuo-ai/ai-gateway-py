@@ -15,6 +15,7 @@ from app.llm.client import get_client_by_model, get_default_client
 from app.models import UsageLog
 from app.schemas import ChatCompletionRequest
 from app.services.ai_model_service import AIModelService
+from app.services.audit_analyzer import AuditAnalyzer
 from app.services.quota_service import QuotaService
 
 
@@ -36,7 +37,19 @@ class LLMService:
         """Handle chat completion request."""
         request_id = generate_uuid()
         start_time = time.time()
-        
+
+        # Audit Analyzer special path
+        if data.model == "audit-analyzer":
+            messages = [msg.model_dump() for msg in data.messages]
+            last_question = ""
+            for msg in reversed(messages):
+                if msg.get("role") == "user":
+                    last_question = msg.get("content", "")
+                    break
+            analyzer = AuditAnalyzer(user_id=user_id, username=username)
+            answer = await analyzer.analyze(last_question)
+            return self._build_audit_response(answer, request_id)
+
         # Get model
         if data.model:
             client = await get_client_by_model(data.model, self.db)
@@ -271,7 +284,44 @@ class LLMService:
         self.db.add(log)
         await self.db.commit()
     
+    def _build_audit_response(self, answer: str, request_id: str) -> dict:
+        """Build OpenAI-compatible response for audit analyzer."""
+        now = int(time.time())
+        return {
+            "id": request_id,
+            "object": "chat.completion",
+            "created": now,
+            "model": "audit-analyzer",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": answer,
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            },
+        }
+
     async def list_models(self) -> list[dict]:
         """List available models."""
         models = await self.model_service.get_active_models()
-        return [m.to_public_dict() for m in models]
+        result = [m.to_public_dict() for m in models]
+        # Add virtual audit analyzer model
+        result.append({
+            "id": "audit-analyzer",
+            "name": "审计分析助手",
+            "provider": "internal",
+            "status": "active",
+            "is_default": False,
+            "temperature": 0.7,
+            "max_tokens": 4096,
+            "created_at": datetime.utcnow().isoformat(),
+        })
+        return result

@@ -7,7 +7,7 @@
           v-for="model in models"
           :key="model.id"
           :label="model.name"
-          :value="model.model_id"
+          :value="model.id"
         />
       </el-select>
     </div>
@@ -17,6 +17,9 @@
         <div v-if="messages.length === 0" class="chat-empty">
           <el-icon :size="64" color="#dcdfe6"><ChatDotRound /></el-icon>
           <p>开始与 AI 对话</p>
+          <p v-if="selectedModel === 'audit-analyzer'" class="audit-hint">
+            试试问我："最近7天谁用了最多token？" 或 "有哪些风险告警？"
+          </p>
         </div>
         
         <div
@@ -27,7 +30,7 @@
         >
           <el-avatar
             :size="40"
-            :icon="msg.role === 'user' ? UserFilled : Cpu"
+            :icon="msg.role === 'user' ? UserFilled : (selectedModel === 'audit-analyzer' ? DataAnalysis : Cpu)"
             :class="msg.role"
           />
           <div class="message-bubble" :class="msg.role">
@@ -37,10 +40,10 @@
         </div>
         
         <div v-if="loading" class="message-item assistant">
-          <el-avatar :size="40" :icon="Cpu" class="assistant" />
+          <el-avatar :size="40" :icon="selectedModel === 'audit-analyzer' ? DataAnalysis : Cpu" class="assistant" />
           <div class="message-bubble assistant">
             <el-icon class="is-loading"><Loading /></el-icon>
-            思考中...
+            {{ selectedModel === 'audit-analyzer' ? '正在查询审计数据...' : '思考中...' }}
           </div>
         </div>
       </div>
@@ -50,7 +53,7 @@
           v-model="inputMessage"
           type="textarea"
           :rows="3"
-          placeholder="输入消息..."
+          :placeholder="selectedModel === 'audit-analyzer' ? '输入审计分析问题，例如：最近7天的调用统计' : '输入消息...'"
           resize="none"
           @keyup.enter.ctrl="sendMessage"
         />
@@ -71,9 +74,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, UserFilled, Cpu, Loading } from '@element-plus/icons-vue'
+import { ChatDotRound, UserFilled, Cpu, Loading, DataAnalysis } from '@element-plus/icons-vue'
 import { getModelsForChat, chatStream } from '@/api/chat'
 import dayjs from 'dayjs'
 import { marked } from 'marked'
@@ -85,24 +88,23 @@ const inputMessage = ref('')
 const loading = ref(false)
 const messagesRef = ref()
 
-// 模拟数据用于演示
 const loadModels = async () => {
   try {
     const res = await getModelsForChat()
-    models.value = res.items || [
-      { id: 1, name: 'GPT-3.5 Turbo', model_id: 'gpt-3.5-turbo' },
-      { id: 2, name: 'GPT-4', model_id: 'gpt-4' }
-    ]
-    if (models.value.length > 0) {
-      selectedModel.value = models.value[0].model_id
+    const list = res.data || res.items || []
+    models.value = list.map(m => ({
+      id: m.id,
+      name: m.id === 'audit-analyzer' ? '🔍 审计分析助手' : (m.name || m.id)
+    }))
+    if (models.value.length > 0 && !selectedModel.value) {
+      selectedModel.value = models.value[0].id
     }
   } catch (error) {
-    // 使用默认数据
     models.value = [
-      { id: 1, name: 'GPT-3.5 Turbo', model_id: 'gpt-3.5-turbo' },
-      { id: 2, name: 'GPT-4', model_id: 'gpt-4' }
+      { id: 'gpt-4', name: 'GPT-4' },
+      { id: 'audit-analyzer', name: '🔍 审计分析助手' }
     ]
-    selectedModel.value = 'gpt-3.5-turbo'
+    selectedModel.value = 'gpt-4'
   }
 }
 
@@ -122,7 +124,7 @@ const sendMessage = async () => {
   const content = inputMessage.value.trim()
   if (!content || !selectedModel.value) return
   
-  // 添加用户消息
+  // Add user message
   messages.value.push({
     role: 'user',
     content: content,
@@ -133,7 +135,7 @@ const sendMessage = async () => {
   loading.value = true
   scrollToBottom()
   
-  // 添加助手消息占位
+  // Add assistant message placeholder
   const assistantMsg = {
     role: 'assistant',
     content: '',
@@ -142,55 +144,46 @@ const sendMessage = async () => {
   messages.value.push(assistantMsg)
   
   try {
-    // 模拟流式响应（实际应使用 chatStream）
-    await simulateStreamResponse(assistantMsg)
-    
-    // 实际实现：
-    // chatStream(
-    //   {
-    //     model: selectedModel.value,
-    //     messages: messages.value.filter(m => m.role !== 'system').map(m => ({
-    //       role: m.role,
-    //       content: m.content
-    //     }))
-    //   },
-    //   (chunk) => {
-    //     const content = chunk.choices?.[0]?.delta?.content || ''
-    //     assistantMsg.content += content
-    //     scrollToBottom()
-    //   },
-    //   (error) => {
-    //     ElMessage.error('发送失败：' + error.message)
-    //   },
-    //   () => {
-    //     loading.value = false
-    //   }
-    // )
+    chatStream(
+      {
+        model: selectedModel.value,
+        messages: messages.value.filter(m => m.role !== 'system').map(m => ({
+          role: m.role,
+          content: m.content
+        }))
+      },
+      (chunk) => {
+        const content = chunk.choices?.[0]?.delta?.content || ''
+        if (content) {
+          assistantMsg.content += content
+          scrollToBottom()
+        }
+      },
+      (error) => {
+        ElMessage.error('发送失败：' + (error.message || '未知错误'))
+        assistantMsg.content = '请求失败，请稍后重试。'
+        loading.value = false
+      },
+      () => {
+        loading.value = false
+      }
+    )
   } catch (error) {
     ElMessage.error('发送失败：' + error.message)
     loading.value = false
   }
 }
 
-// 模拟流式响应用于演示
-const simulateStreamResponse = async (msg) => {
-  const responses = [
-    '您好！我是AI助手，很高兴为您服务。',
-    '我可以帮助您解答问题、生成文本、分析数据等。',
-    '请问有什么可以帮您的吗？'
-  ]
-  
-  const response = responses[Math.floor(Math.random() * responses.length)]
-  const chars = response.split('')
-  
-  for (const char of chars) {
-    await new Promise(resolve => setTimeout(resolve, 50))
-    msg.content += char
-    scrollToBottom()
+// Welcome message when switching to audit analyzer
+watch(selectedModel, (newVal, oldVal) => {
+  if (newVal === 'audit-analyzer' && messages.value.length === 0) {
+    messages.value.push({
+      role: 'assistant',
+      content: '👋 你好！我是**审计分析助手**。\n\n你可以向我提问：\n- 最近7天/30天的调用统计\n- 谁用了最多的Token\n- 有哪些风险告警\n- 哪个模型最热门\n- 我的个人调用记录\n- 最近几天的调用趋势',
+      time: dayjs().format('HH:mm:ss')
+    })
   }
-  
-  loading.value = false
-}
+})
 
 onMounted(() => {
   loadModels()
@@ -235,6 +228,12 @@ onMounted(() => {
 .chat-empty p {
   margin-top: 16px;
   font-size: 16px;
+}
+
+.audit-hint {
+  font-size: 13px;
+  color: #409EFF;
+  margin-top: 8px;
 }
 
 .message-item {
@@ -293,6 +292,23 @@ onMounted(() => {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: monospace;
+}
+
+.message-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.message-content :deep(th),
+.message-content :deep(td) {
+  border: 1px solid #dcdfe6;
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.message-content :deep(th) {
+  background: #f5f7fa;
 }
 
 .message-time {
